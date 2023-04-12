@@ -3,31 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter_slidable/flutter_slidable.dart';
 
 void main() {
   runApp(ProviderScope(child:  MyApp()));
 }
-
-final tasksProvider = StateNotifierProvider<TaskNotifier, List<Task>>((ref) {
-  return TaskNotifier( tasks: [
-    Task(id: 1, label: "Load the rocket"),
-    Task(id: 2, label: "Launch rocket"),
-    Task(id: 3, label: "Circle the home planet") ,
-    Task(id: 4, label: "Head out to the first moon"),
-    Task(id: 5, label : "Launch moon lander #1")
-  ]);
-});
-
-final productProvider = StateNotifierProvider<ProductNotifier, List<Product>>((ref) {
-  return ProductNotifier( products : [
-    Product(id: 1, name: "huevos Pequeños", units: 3),
-    Product(id: 2, name: "huevos Grandes", units: 3),
-    Product(id: 3, name: "huevos Medianos", units: 3),
-    Product(id: 4, name: "huevos que me faltan para declararme a mi crush", units: 0)
-  ] );
-});
-
-
 
 
 class MyApp extends StatefulWidget {
@@ -38,38 +18,6 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-
-  List<Product> listModel = [];
-
-  Future<Null> fetchProducts() async {
-    final response = await http
-        .get(Uri.parse('https://jmp.iv.o-app.xyz/items'));
-
-    List<Product> listModel = [];
-
-    if (response.statusCode == 200) {
-      // If the server did return a 200 OK response,
-      // then parse the JSON.
-
-      final data = jsonDecode(response.body);
-      for (var prod in data) {
-        listModel.add(new Product(id: prod['id'], name: prod['name'], units: prod['units']));
-      }
-      print(listModel);
-
-    } else {
-      // If the server did not return a 200 OK response,
-      // then throw an exception.
-      print('Liadinha');
-    }
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    fetchProducts();
-  }
-
 
 
   // This widget is the root of your application.
@@ -85,37 +33,304 @@ class _MyAppState extends State<MyApp> {
   }
 }
 
-class MyHomePage extends ConsumerWidget {
+class MyHomePage extends StatefulWidget {
   @override
+  State<MyHomePage> createState() => _MyHomePageState();
+}
+
+class _MyHomePageState extends State<MyHomePage> {
+
+  var loading = false;
+  List<Product> listModel = [];
+
+  void delete(BuildContext context) {
+
+  }
 
 
-  Widget build(BuildContext context,  WidgetRef ref) {
+  Future<void> _dialogBuilder(BuildContext context, String name, String units, int id, int option) {
+
+    final nameController = TextEditingController();
+    final unitsController = TextEditingController();
+    nameController.text = name;
+    unitsController.text = units;
+    Future<Null> addProducts(name, units) async {
+
+      if(option == 1 ) {   //add
+        await http.post(
+          Uri.parse('https://jmp.iv.o-app.xyz/items'),
+          headers: <String, String>{
+            'Content-Type': 'application/json; charset=UTF-8',
+          },
+          body: jsonEncode(<String, dynamic>{
+            'name': name,
+            'units' : units
+          }),
+        );
+      }
+      else if (option == 2){ //edit
+        await http.put(
+          Uri.parse('https://jmp.iv.o-app.xyz/items/${id}'),
+          headers: <String, String>{
+            'Content-Type': 'application/json; charset=UTF-8',
+          },
+          body: jsonEncode(<String, dynamic>{
+            'name': name,
+            'units' : units
+          }),
+        );
+      }
+      else {
+        await http.delete(
+          Uri.parse('https://jmp.iv.o-app.xyz/items/${id}')
+        );
+      }
+
+
+      Future.delayed(const Duration(milliseconds: 1000), () {
+        fetchProducts();
+      });
+
+    }
+    @override
+    void dispose() {
+      // Clean up the controller when the widget is disposed.
+      nameController.dispose();
+      unitsController.dispose();
+    }
+    if (option == 1 || option == 2) {
+      return showDialog<void>(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: const Text('Add New Product'),
+            content: Form(
+                child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Padding(
+                          padding: EdgeInsets.all(8.0),
+                          child: TextField(
+                            decoration: const InputDecoration(labelText: 'Name'),
+                            controller: nameController,
+                          )
+                      ),
+                      Padding(
+                          padding: EdgeInsets.all(8.0),
+                          child: TextField(
+                            decoration: const InputDecoration(labelText: 'Units'),
+                            controller: unitsController,
+                          )
+                      ),
+                    ]
+                )
+            ),
+            actions: <Widget>[
+              TextButton(
+                style: TextButton.styleFrom(
+                  textStyle: Theme.of(context).textTheme.labelLarge,
+                ),
+                child: const Text('Cancel'),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                },
+              ),
+              ElevatedButton(
+                style: TextButton.styleFrom(
+                  textStyle: Theme.of(context).textTheme.labelLarge,
+                ),
+                child: const Text('Submit'),
+                onPressed: () {
+                  // ref.read(productProvider.notifier).add(new Product(id: 4, name: nameController.text, units: int.parse(unitsController.text)));
+                  addProducts(nameController.text, int.parse(unitsController.text));
+                  Navigator.of(context).pop();
+
+                },
+              ),
+            ],
+
+          );
+        },
+      );
+    }
+    else  { //Dialog for elimination
+      return showDialog<void>(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: const Text('Delete Product'),
+            content: Form(
+                child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Padding(
+                          padding: EdgeInsets.all(8.0),
+                          child: Text('Are you sure you want to delete this item?'
+                          )
+                      ),
+
+                    ]
+                )
+            ),
+            actions: <Widget>[
+              TextButton(
+                style: TextButton.styleFrom(
+                  textStyle: Theme.of(context).textTheme.labelLarge,
+                ),
+                child: const Text('Cancel'),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                },
+              ),
+              ElevatedButton(
+                style: TextButton.styleFrom(
+                  textStyle: Theme.of(context).textTheme.labelLarge,
+                ),
+                child: const Text('Delete'),
+                onPressed: () {
+                  // ref.read(productProvider.notifier).add(new Product(id: 4, name: nameController.text, units: int.parse(unitsController.text)));
+                  addProducts(nameController.text, int.parse(unitsController.text));
+                  Navigator.of(context).pop();
+
+                },
+              ),
+            ],
+
+          );
+        },
+      );
+    }
+
+  } // DIALOG BUILDER
+
+
+
+
+  Future<Null> fetchProducts() async {
+
+    setState(() {
+      loading = true;
+    });
+
+
+
+
+    final response = await http
+        .get(Uri.parse('https://jmp.iv.o-app.xyz/items'));
+
+    listModel.clear();
+
+    if (response.statusCode == 200) {
+      // If the server did return a 200 OK response,
+      // then parse the JSON.
+
+      final data = jsonDecode(response.body);
+      for (var prod in data) {
+        listModel.add(new Product(id: prod['id'], name: prod['name'], units: prod['units']));
+      }
+      setState(() {
+        loading = false;
+      });
+
+
+    } else {
+      // If the server did not return a 200 OK response,
+      // then throw an exception.
+      print('F');
+      print(response.body);
+    }
+  }
+  @override
+  void initState() {
+    super.initState();
+    fetchProducts();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+
     return Scaffold(
       appBar: AppBar(
         title: Text('LIST OF PRODUCTS!'),
       ),
       body:
-         ProductList(),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _dialogBuilder(context, ref),
-        backgroundColor: Colors.red,
-        child: const Icon(Icons.add),
 
+      Container(
+
+        child: loading ? Center (child: CircularProgressIndicator()) : ListView.builder(
+        itemCount: listModel.length,
+        itemBuilder: (context, i){
+        // final nDataList = listModel[i];
+          return
+            Slidable(
+              // Specify a key if the Slidable is dismissible.
+              key: const ValueKey(0),
+
+          // The start action pane is the one at the left or the top side.
+          startActionPane: ActionPane(
+                // A motion is a widget used to control how the pane animates.
+                motion: const ScrollMotion(),
+
+                // A pane can dismiss the Slidable.
+                dismissible: DismissiblePane(onDismissed: () {
+                  _dialogBuilder(context, listModel[i].name, listModel[i].units.toString(), listModel[i].id, 3);
+                }),
+
+                // All actions are defined in the children parameter.
+                children:  [
+                // A SlidableAction can have an icon and/or a label.
+                SlidableAction(
+                onPressed: (_) => {_dialogBuilder(_, listModel[i].name, listModel[i].units.toString(), listModel[i].id, 3)},
+                backgroundColor: Color(0xFFFE4A49),
+                foregroundColor: Colors.white,
+                icon: Icons.delete,
+                label: 'Delete',
+                ),
+
+                ],
+                ),
+              endActionPane:  ActionPane(
+                motion: ScrollMotion(),
+
+                children: [
+                  SlidableAction(
+                    // An action can be bigger than the others.
+
+                    onPressed: (_) => {_dialogBuilder(_, listModel[i].name, listModel[i].units.toString(), listModel[i].id, 2)},
+                    backgroundColor: Color(0xFF7BC043),
+                    foregroundColor: Colors.white,
+                    icon: Icons.archive,
+                    label: 'Edit',
+                  ),
+
+                ],
+              ),
+
+          child: InkWell(
+            onTap: () => {
+              _dialogBuilder(context, listModel[i].name, listModel[i].units.toString(), listModel[i].id, 2),  // :)
+            },
+            onDoubleTap: () => {    _dialogBuilder(context,  listModel[i].name, listModel[i].units.toString(), listModel[i].id, 3) },
+            child:
+            ProductItem(product: listModel[i])
+            ,
+          ),
+            );
+
+        }
 
     ),
-    );
-  }
-}
-class ProductList extends ConsumerWidget {
 
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
+    ),
+        floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          _dialogBuilder(context, '', '', 0, 1);
+        },
+    backgroundColor: Colors.red,
+    child: const Icon(Icons.add),
+    ),
 
-    var products = ref.watch(productProvider);
 
-
-    return Column(
-      children: products.map((product) => ProductItem(product: product), ).toList(),
     );
   }
 }
@@ -132,75 +347,13 @@ class ProductItem extends ConsumerWidget {
       title: Text(product.name),
       subtitle: Text(product.units.toString()),
       trailing: Icon(Icons.chevron_right),
-      onTap: () => print('tapped'),
+
     );
 
-
   }
 
 }
-Future<void> _dialogBuilder(BuildContext context,  WidgetRef ref) {
 
-  final nameController = TextEditingController();
-  final unitsController = TextEditingController();
-
-  @override
-  void dispose() {
-    // Clean up the controller when the widget is disposed.
-    nameController.dispose();
-    unitsController.dispose();
-  }
-
-  return showDialog<void>(
-    context: context,
-    builder: (BuildContext context) {
-      return AlertDialog(
-        title: const Text('Add New Product'),
-        content: Form(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-              Padding(
-              padding: EdgeInsets.all(8.0),
-              child: TextField(
-                controller: nameController,
-              )
-              ),
-              Padding(
-              padding: EdgeInsets.all(8.0),
-                  child: TextField(
-                    controller: unitsController,
-                  )
-              ),
-              ]
-            )
-        ),
-        actions: <Widget>[
-          TextButton(
-            style: TextButton.styleFrom(
-              textStyle: Theme.of(context).textTheme.labelLarge,
-            ),
-            child: const Text('Cancel'),
-            onPressed: () {
-              Navigator.of(context).pop();
-            },
-          ),
-          ElevatedButton(
-            style: TextButton.styleFrom(
-              textStyle: Theme.of(context).textTheme.labelLarge,
-            ),
-            child: const Text('Submit'),
-            onPressed: () {
-              ref.read(productProvider.notifier).add(new Product(id: 4, name: nameController.text, units: int.parse(unitsController.text)));
-              Navigator.of(context).pop();
-            },
-          ),
-        ],
-
-      );
-    },
-  );
-}
 @immutable
 class Product {
   final int id;
@@ -225,109 +378,6 @@ class Product {
         id: id ?? this.id,
         name: name ?? this.name,
         units: units ?? this.units);
-  }
-}
-
-class ProductNotifier extends StateNotifier<List<Product>> {
-  ProductNotifier({products}) : super(products);
-
-  void add(Product product) {
-    print('KLK');
-    print(state);
-    state = [...state, product];
-    print(state);
-  }
-
-
-}
-
-class Progress extends ConsumerWidget {
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    var tasks = ref.watch(tasksProvider);
-
-    var numCompletedTasks = tasks.where((task) {
-      return task.completed == true;
-    }).length;
-
-    return Column(
-      children: [
-        Text("You are this far from descovering the whole universe"),
-        LinearProgressIndicator(value: numCompletedTasks/tasks.length),
-
-      ],
-    );
-  }
-}
-
-class TaskList extends ConsumerWidget {
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-
-    var tasks = ref.watch(tasksProvider);
-
-
-    return Column(
-      children: tasks.map((task) => TaskItem(task: task), ).toList(),
-    );
-  }
-}
-
-class TaskItem extends ConsumerWidget {
-  final Task task;
-
-
-
-  const TaskItem({Key? key,  required this.task}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Row(
-      children: [
-        Checkbox(
-          onChanged: (newValue) =>
-              ref.read(tasksProvider.notifier).toggle(task.id),
-          value : task.completed,
-        ),
-        Text(task.label),
-      ],
-    );
-  }
-}
-
-@immutable
-class Task {
-  final int id;
-  final String label;
-  final bool completed;
-
-  Task({required this.id, required this.label, this.completed = false});
-
-  Task copyWith({int? id, String? label, bool? completed}) {
-    return Task(
-        id: id ?? this.id,
-        label: label ?? this.label,
-        completed: completed ?? this.completed);
-  }
-}
-
-class TaskNotifier extends StateNotifier<List<Task>> {
-  TaskNotifier({tasks}) : super(tasks);
-
-  void add(Task task) {
-    state = [...state, task];
-  }
-
-  void toggle(int taskId) {
-    state = [
-      for (final item in state)
-        if (taskId == item.id)
-          item.copyWith(completed: !item.completed)
-        else
-          item
-    ];
   }
 }
 
